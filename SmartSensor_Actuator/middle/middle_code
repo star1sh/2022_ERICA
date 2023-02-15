@@ -1,0 +1,246 @@
+#pragma config(Sensor, S1, ts, sensorEV3_Touch)
+#pragma config(Sensor, S2, gs, sensorEV3_Gyro)
+#pragma config(Sensor, S3, cs, sensorEV3_Color, modeEV3Color_Color)
+#pragma config(Sensor, S4, ss, sensorEV3_Ultrasonic)
+#pragma config(Motor, motorB, lm, tmotorEV3_Large, PIDControl, encoder)
+#pragma config(Motor, motorC, rm, tmotorEV3_Large, PIDControl, encoder)
+
+#define Black 1
+#define Blue 2
+#define Green 3
+#define Yellow 4
+#define Red 5
+#define White 6
+#define Brown 7
+
+int color, finish_line , uss , cnt, speed = 12, start_val = 0;
+int initval_w = getGyroDegrees(gs);
+int gyro_w = getGyroDegrees(gs);
+int initval_c = getGyroDegrees(gs);
+int gyro_c = getGyroDegrees(gs);
+
+void go(int s) //go forward
+{
+   setMotorSpeed(lm, s);
+   setMotorSpeed(rm, s);
+
+}
+
+
+int convert(float diss) //getting cm value
+{
+   return (int)(360.0 * diss / 17.58);
+}
+
+void cm_go(float dist, int sp ) //cm go with EncoderSensor
+{
+   int cm = convert(dist);
+
+
+  resetMotorEncoder(lm);
+
+  while(getMotorEncoder(lm) < cm)
+     {
+      go(sp);
+      }
+  setMotorSpeed(lm,0);
+  setMotorSpeed(rm,0);
+}
+
+
+task main()
+{
+   while(getTouchValue(ts) == 0){} //button touched
+   while(getTouchValue(ts) == 1){}
+   color = getColorName(cs);
+   float t;
+
+   while(1)
+   {
+      go(speed);
+      uss = getUSDistance(ss);
+
+      while(uss < 50) //reacting because of obstacles is infront of robot in 50cm. using UltraSoundSensor
+      {
+         uss = getUSDistance(ss);
+         playSound(soundBeepBeep);
+         sleep(500);
+         go(speed*0.5);
+
+         if ( uss < 10 ) //obstacle reaction2
+         {
+            go(0);
+            sleep(300);
+
+            int enc_degree = convert(20.0);
+            resetMotorEncoder(lm);
+
+            while(getMotorEncoder(lm) > (-1) * enc_degree) //go backward 20cm 
+            {
+               go(-speed*0.5);
+            }
+
+            go(0);
+            sleep(300);
+
+
+
+            resetGyro(gs);
+            initval_c = getGyroDegrees(gs);
+            gyro_c = getGyroDegrees(gs);
+
+            while(gyro_c< (initval_c + 90))//point_clockturn1
+               {
+                gyro_c = getGyroDegrees(gs);
+               setMotorSpeed(lm,speed*0.5);
+               setMotorSpeed(rm,-speed*0.5);
+            }
+          go(0);
+          sleep(300);
+
+
+          cm_go(10.0 * cnt,speed*0.5); //go 20cm with half speed
+
+
+            resetGyro(gs);
+            initval_c = getGyroDegrees(gs);
+            gyro_c = getGyroDegrees(gs);
+
+
+            while(gyro_c - initval_c < 90)//point_clockturn2
+            {
+                gyro_c = getGyroDegrees(gs);
+                setMotorSpeed(lm,speed*0.5);
+                setMotorSpeed(rm,-speed*0.5);
+            }
+            go(0);
+            sleep(300);
+            uss = getUSDistance(ss); //to not repeat the while clauses again
+            break;
+         }
+         continue;
+      }
+
+      if(getColorName(cs) != color) //get color value if color changed
+      {
+         go(3); // to get accurate color value
+         sleep(300);
+         go(0);
+         sleep(700);
+         color = getColorName(cs);
+      }
+
+      if(!start_val && ((color==Black)||(color==Green)||(color==Yellow)||(color==Brown)))//recieve_startvalue
+      {
+         finish_line = color;
+         setLEDColor(ledGreen);
+         sleep(500);
+         clearTimer(T1);  // start counting time because robot got startval
+         start_val++;
+         go(speed);
+         sleep(700);
+         color = getColorName(cs);
+
+      }
+
+      if(color == finish_line)//stop because of finishline
+      {
+         go(0);
+         sleep(5000);
+         break;
+      }
+
+
+      if(color == Black) //Black Reaction
+      {
+         cnt++; // get the number of black lines the robot met.
+         if(cnt>=10) //if count is more than 10, stop immediately
+         {
+               go(0);
+               sleep(5000);
+            break; //stop
+         }
+
+         else
+         {
+            go(speed);
+            sleep(700);
+         }
+      }
+
+      if(color == Blue) //Blue Reaction
+      {
+         if(cnt == 0) // if robot didn't met Black yet
+         {
+           playSound(soundBeepBeep);
+           sleep(700);
+         }
+
+         else
+         {
+            for(int i = 1; i<=cnt; i++) // if robot met Black sound repeat
+            {
+                  playSound(soundBeepBeep);
+                  sleep(700);
+                  if(getColorName(cs) != color)
+                  {
+                     go(0);
+                  }
+
+
+            }
+
+         }
+      }
+
+
+      if(color == Red) //Red Reaction
+      {
+        go(speed);
+        sleep(700);
+
+        go(0);
+        sleep(300);
+
+        resetGyro(gs); 
+        initval_w = getGyroDegrees(gs);
+        gyro_w = getGyroDegrees(gs);
+
+
+
+        while(gyro_w - initval_w > (-90)) //pointturn in  clockwiseway
+        {
+            gyro_w = getGyroDegrees(gs);
+            setMotorSpeed(lm,-speed*0.5);
+            setMotorSpeed(rm,speed*0.5);
+        }
+
+        go(0);
+        sleep(300);
+
+
+        cm_go(10.0*cnt,speed*0.5); // go with the value robot got
+
+        resetGyro(gs);
+
+        initval_w = getGyroDegrees(gs);
+        gyro_w = getGyroDegrees(gs);
+
+        while(gyro_w - initval_w > (-90))//pointturn2 in clockwise
+        {
+            gyro_w = getGyroDegrees(gs);
+            setMotorSpeed(lm,-speed*0.5);
+            setMotorSpeed(rm,speed*0.5);
+        }
+
+      }
+
+   }
+   // end of robot moving
+
+   t = time1[T1]; // get the time
+
+   displayBigTextLine(1, "record = %.2f", t/1000); // print timevalue
+   sleep(10000);
+
+}
